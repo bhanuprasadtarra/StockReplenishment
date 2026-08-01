@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="StockReplenishment.Api/StockReplenishment.Api.csproj" />
+  <Project Path="StockReplenishment.Blazor/StockReplenishment.Blazor.csproj" />
+  <Project Path="StockReplenishment.Tests/StockReplenishment.Tests.csproj" />
+</Solution>

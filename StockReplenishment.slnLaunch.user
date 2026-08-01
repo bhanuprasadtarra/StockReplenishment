@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "StockReplenishment.Api\\StockReplenishment.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "StockReplenishment.Blazor\\StockReplenishment.Blazor.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]
