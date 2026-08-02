@@ -1,0 +1,63 @@
+@page "/requests/{Id:guid}"
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Request Details</PageTitle>
+
+@if (request is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    @* Same 900px cap as the create form - a detail card this narrow stays readable
+       instead of stretching its line-item table across a wide monitor *@
+    <MudContainer MaxWidth="MaxWidth.False" Style="max-width:900px;" Class="px-0">
+        <RequestDetail Request="request" OnAction="HandleAction" OnBack="@(() => Nav.NavigateTo("/requests"))" />
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private RequestDto? request;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => request = await Api.GetAsync(Id);
+
+    private async Task HandleAction((string action, RequestDto dto) args)
+    {
+        var (action, dto) = args;
+        try
+        {
+            switch (action)
+            {
+                case "submit":
+                    await Api.SubmitAsync(Id);
+                    break;
+                case "delete":
+                    await Api.DeleteAsync(Id);
+                    Nav.NavigateTo("/requests");
+                    return;
+                case "approve":
+                    await Api.ApproveAsync(Id);
+                    break;
+                case "reject":
+                    await Api.RejectAsync(Id, dto.RejectionReason ?? string.Empty);
+                    break;
+                case "fulfill":
+                    var items = dto.LineItems.Select(li => new FulfillmentItem { LineItemId = li.Id!.Value, FulfilledQuantity = li.FulfilledQuantity }).ToList();
+                    await Api.FulfillAsync(Id, items);
+                    break;
+                case "refresh":
+                    break;
+            }
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

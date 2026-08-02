@@ -1,0 +1,89 @@
+<MudCard Class="mb-4">
+    <MudCardContent>
+        <MudForm @ref="form">
+            @* Location/Priority sit side by side once there's room (sm+), stack full-width
+               on phones - same mobile-first xs/sm pattern the line items grid already used *@
+            <MudGrid>
+                <MudItem xs="12" sm="8">
+                    <MudTextField @bind-Value="Request.StockLocation" Label="Stock Location" Required="true" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect @bind-Value="Request.Priority" Label="Priority">
+                        <MudSelectItem Value="RequestPriority.Low">Low</MudSelectItem>
+                        <MudSelectItem Value="RequestPriority.Normal">Normal</MudSelectItem>
+                        <MudSelectItem Value="RequestPriority.Urgent">Urgent</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Request.Notes" Label="Notes" Lines="3" />
+                </MudItem>
+            </MudGrid>
+
+            <MudText Typo="Typo.h6" Class="mt-6 mb-2">Line Items</MudText>
+            @foreach (var item in Request.LineItems)
+            {
+                @* Each line item is its own responsive row: 5 columns side by side on
+                   tablet/desktop (sm+), full-width stacked fields on phones (xs) *@
+                <MudGrid Class="mb-2">
+                    <MudItem xs="12" sm="3">
+                        <MudTextField @bind-Value="item.ArticleNumber" Label="Article" Required="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="3">
+                        <MudTextField @bind-Value="item.Description" Label="Description" />
+                    </MudItem>
+                    <MudItem xs="6" sm="2">
+                        @* Qty is whole numbers only, minimum 1 - Min/Step keep the spinner arrows
+                           in line, but someone can still type "1.5" directly, so ValidateQuantity
+                           is what actually blocks it (wired into the same form.ValidateAsync()
+                           the Save button already runs) *@
+                        @* Validation takes "object" on MudNumericField, so the method group needs
+                           an explicit Func<> wrap - otherwise the compiler can't tell if we mean
+                           "pass this delegate" or "call it and pass the result" *@
+                        <MudNumericField @bind-Value="item.RequestedQuantity" Label="Qty" Min="1" Step="1"
+                                         Validation="@(new Func<decimal, string?>(ValidateQuantity))" Required="true" />
+                    </MudItem>
+                    <MudItem xs="6" sm="2">
+                        <MudTextField @bind-Value="item.Unit" Label="Unit" />
+                    </MudItem>
+                    <MudItem xs="12" sm="2">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small" OnClick="@(() => Request.LineItems.Remove(item))">Remove</MudButton>
+                    </MudItem>
+                </MudGrid>
+            }
+
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddLineItem">Add Item</MudButton>
+        </MudForm>
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleSubmit">Save</MudButton>
+        <MudButton OnClick="@(() => OnCancel.InvokeAsync())">Cancel</MudButton>
+    </MudCardActions>
+</MudCard>
+
+@code {
+    [Parameter] public EventCallback<RequestDto> OnSubmit { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public RequestDto Request { get; set; } = new();
+
+    private MudForm form = null!;
+
+    private void AddLineItem() => Request.LineItems.Add(new LineItemDto { Unit = "pcs" });
+
+    // RequestedQuantity is decimal (matches the API DTO), so "whole numbers only" isn't
+    // something Min/Step alone can enforce - someone typing "1.5" straight into the box
+    // would sail right past those. This runs as part of form.ValidateAsync() below, same
+    // as the built-in Required checks on the other fields.
+    private static string? ValidateQuantity(decimal qty) => qty switch
+    {
+        < 1 => "Quantity must be at least 1",
+        _ when qty != Math.Floor(qty) => "Quantity must be a whole number",
+        _ => null
+    };
+
+    private async Task HandleSubmit()
+    {
+        await form.ValidateAsync();
+        if (form.IsValid && Request.LineItems.Count > 0)
+            await OnSubmit.InvokeAsync(Request);
+    }
+}

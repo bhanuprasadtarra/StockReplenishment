@@ -1,0 +1,36 @@
+@page "/requests/create"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>New Request</PageTitle>
+
+@if (!AppState.IsWorker())
+{
+    @* Someone could still reach this URL directly (bookmark, back button, typed it in) even
+       though the button that links here is hidden from Reviewers - this is the backstop *@
+    <MudAlert Severity="Severity.Error" Class="mb-4">Only Workers can create requests.</MudAlert>
+    <MudButton Variant="Variant.Filled" OnClick="@(() => Nav.NavigateTo("/requests"))">Back to List</MudButton>
+}
+else
+{
+    @* Narrower than the 1200px page-wide cap from MainLayout - a single-column form
+       reads better around 900px than stretched edge-to-edge on a wide monitor.
+       MaxWidth.False + Style lets us pick that exact number instead of the nearest
+       built-in MudBlazor breakpoint *@
+    <MudContainer MaxWidth="MaxWidth.False" Style="max-width:900px;" Class="px-0">
+        <MudText Typo="Typo.h4" Class="mb-4">New Replenishment Request</MudText>
+
+        <RequestForm Request="newRequest" OnSubmit="HandleCreate" OnCancel="@(() => Nav.NavigateTo("/requests"))" />
+    </MudContainer>
+}
+
+@code {
+    private RequestDto newRequest = new() { LineItems = new() { new LineItemDto { Unit = "pcs" } } };
+
+    private async Task HandleCreate(RequestDto dto)
+    {
+        var created = await Api.CreateAsync(dto);
+        if (created?.Id is not null)
+            Nav.NavigateTo($"/requests/{created.Id}");
+    }
+}

@@ -1,0 +1,172 @@
+@inject ISnackbar Snackbar
+
+<MudCard>
+    <MudCardHeader>
+        <CardHeaderContent>
+            <MudText Typo="Typo.h5">@Request.RequestNumber</MudText>
+        </CardHeaderContent>
+        <CardHeaderActions>
+            <MudChip T="string" Color="@StatusColor(Request.Status)">@Request.Status</MudChip>
+        </CardHeaderActions>
+    </MudCardHeader>
+    <MudCardContent>
+        <MudGrid>
+            <MudItem xs="6"><MudText>Location: @Request.StockLocation</MudText></MudItem>
+            <MudItem xs="6"><MudText>Priority: @Request.Priority</MudText></MudItem>
+            <MudItem xs="6"><MudText>Created By: @Request.CreatedBy</MudText></MudItem>
+            <MudItem xs="6"><MudText>Created: @Request.CreatedDate?.ToShortDateString()</MudText></MudItem>
+            @if (Request.Status == RequestStatus.Rejected)
+            {
+                <MudItem xs="12"><MudText Color="Color.Error">Rejection Reason: @Request.RejectionReason</MudText></MudItem>
+            }
+            @if (!string.IsNullOrWhiteSpace(Request.Notes))
+            {
+                <MudItem xs="12"><MudText>Notes: @Request.Notes</MudText></MudItem>
+            }
+        </MudGrid>
+
+        <MudText Typo="Typo.h6" Class="mt-6 mb-2">Line Items</MudText>
+        <MudTable Items="Request.LineItems" Striped="true" T="LineItemDto">
+            <HeaderContent>
+                <MudTh>Article</MudTh>
+                <MudTh>Description</MudTh>
+                <MudTh Style="text-align:right">Requested</MudTh>
+                @if (Request.Status == RequestStatus.Approved)
+                {
+                    <MudTh Style="text-align:right">Fulfill Qty</MudTh>
+                }
+                else
+                {
+                    <MudTh Style="text-align:right">Fulfilled</MudTh>
+                }
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Article">@context.ArticleNumber</MudTd>
+                <MudTd DataLabel="Description">@context.Description</MudTd>
+                <MudTd DataLabel="Requested" Style="text-align:right">@context.RequestedQuantity @context.Unit</MudTd>
+                @* Only the Reviewer fulfills a request, so only they get an editable qty box here -
+                   a Worker looking at their own Approved request just sees the plain numbers below *@
+                @if (Request.Status == RequestStatus.Approved && AppState.IsReviewer())
+                {
+                    <MudTd DataLabel="Fulfill Qty" Style="text-align:right">
+                        <MudNumericField T="decimal" Value="@GetFulfillQty(context.Id!.Value)" ValueChanged="@(v => SetFulfillQty(context.Id!.Value, v))" Min="0" Max="@context.RequestedQuantity" />
+                    </MudTd>
+                }
+                else
+                {
+                    <MudTd DataLabel="Fulfilled" Style="text-align:right">@context.FulfilledQuantity @context.Unit</MudTd>
+                }
+            </RowTemplate>
+        </MudTable>
+
+        @if (Request.Status == RequestStatus.Submitted && Request.Id is not null)
+        {
+            <ValidationPoll RequestId="Request.Id.Value" OnCompleted="OnValidationCompleted" />
+        }
+
+        @if (showRejectInput)
+        {
+            <MudTextField @bind-Value="rejectReason" Label="Rejection reason" Class="mt-4" Required="true" />
+        }
+    </MudCardContent>
+    <MudCardActions>
+        @* Workers own Draft/Submitted (their own requests), Reviewers own the approval
+           decision and the final fulfillment - each status only exposes actions to the
+           role that's actually meant to act on it, the other role gets a read-only view *@
+        @switch (Request.Status)
+        {
+            case RequestStatus.Draft:
+                @if (AppState.IsWorker())
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OnAction.InvokeAsync(("submit", Request)))">Submit</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => OnAction.InvokeAsync(("delete", Request)))">Delete</MudButton>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">Draft - not yet submitted</MudAlert>
+                }
+                break;
+            case RequestStatus.Submitted:
+                @if (AppState.IsReviewer())
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => OnAction.InvokeAsync(("approve", Request)))">Approve</MudButton>
+                    @if (!showRejectInput)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="@(() => showRejectInput = true)">Reject</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmReject">Confirm Reject</MudButton>
+                    }
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">Awaiting reviewer decision</MudAlert>
+                }
+                break;
+            case RequestStatus.Approved:
+                @if (AppState.IsReviewer())
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmFulfill">Fulfill</MudButton>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">Approved - awaiting fulfillment</MudAlert>
+                }
+                break;
+        }
+        <MudButton OnClick="@(() => OnBack.InvokeAsync())">Back</MudButton>
+    </MudCardActions>
+</MudCard>
+
+@code {
+    [Parameter] public RequestDto Request { get; set; } = new();
+    [Parameter] public EventCallback<(string action, RequestDto dto)> OnAction { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    private bool showRejectInput;
+    private string rejectReason = string.Empty;
+
+    // Keyed separately from the DTO instead of binding straight to FulfilledQuantity, so that
+    // typing into the "fulfill qty" boxes doesn't quietly overwrite FulfilledQuantity on
+    // requests that aren't Approved yet. Defaults each box to the requested quantity until
+    // the user overrides it (partial fulfillment is the exception, not the norm).
+    private readonly Dictionary<Guid, decimal> fulfillQuantities = new();
+
+    private decimal GetFulfillQty(Guid lineItemId) =>
+        fulfillQuantities.TryGetValue(lineItemId, out var q) ? q : Request.LineItems.First(li => li.Id == lineItemId).RequestedQuantity;
+
+    private void SetFulfillQty(Guid lineItemId, decimal value) => fulfillQuantities[lineItemId] = value;
+
+    private async Task ConfirmReject()
+    {
+        if (string.IsNullOrWhiteSpace(rejectReason))
+        {
+            Snackbar.Add("Rejection reason is required", Severity.Warning);
+            return;
+        }
+        Request.RejectionReason = rejectReason;
+        await OnAction.InvokeAsync(("reject", Request));
+    }
+
+    private async Task ConfirmFulfill()
+    {
+        Request.LineItems.ForEach(li => li.FulfilledQuantity = GetFulfillQty(li.Id!.Value));
+        await OnAction.InvokeAsync(("fulfill", Request));
+    }
+
+    // Not a real workflow action - just reuses the same OnAction channel to tell the page
+    // to re-fetch the request once validation finishes, since the polled status lives on
+    // ValidationPoll's own state, not on this Request instance
+    private Task OnValidationCompleted() => OnAction.InvokeAsync(("refresh", Request));
+
+    private static Color StatusColor(RequestStatus? status) => status switch
+    {
+        RequestStatus.Draft => Color.Default,
+        RequestStatus.Submitted => Color.Info,
+        RequestStatus.Approved => Color.Success,
+        RequestStatus.Rejected => Color.Error,
+        RequestStatus.Fulfilled => Color.Tertiary,
+        _ => Color.Default
+    };
+}

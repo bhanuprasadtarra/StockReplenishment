@@ -1,0 +1,117 @@
+@page "/requests"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Replenishment Requests</PageTitle>
+
+@* Page width itself is already capped by the MudContainer in MainLayout - nothing to
+   do here except make the table behave on small screens (below) *@
+<MudText Typo="Typo.h4" Class="mb-4">Replenishment Requests</MudText>
+
+<MudPaper Class="pa-4 mb-4" Elevation="0">
+    <MudGrid>
+        <MudItem xs="12" sm="3">
+            @* Value + ValueChanged instead of @bind-Value - re-fetching the page is the whole
+               point of picking a filter, @bind-Value alone wouldn't trigger that *@
+            <MudSelect T="string" Label="Status" Value="statusFilter" Clearable="true" ValueChanged="@(async v => { statusFilter = v; await LoadAsync(); })">
+                @foreach (var s in Enum.GetNames<RequestStatus>())
+                {
+                    <MudSelectItem Value="@s">@s</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudSelect T="string" Label="Priority" Value="priorityFilter" Clearable="true" ValueChanged="@(async v => { priorityFilter = v; await LoadAsync(); })">
+                @foreach (var p in Enum.GetNames<RequestPriority>())
+                {
+                    <MudSelectItem Value="@p">@p</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="4" Class="d-flex align-center">
+            <MudSpacer />
+            @* Reviewers only ever act on requests someone else already created, so there's
+               nothing for them to do on this button *@
+            @if (AppState.IsWorker())
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => Nav.NavigateTo("/requests/create"))">
+                    New Request
+                </MudButton>
+            }
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (page is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    @* Breakpoint="Breakpoint.Sm" switches the table to stacked cards (using each MudTd's
+       DataLabel as the row label) below the sm breakpoint, instead of squeezing a
+       5-column table into a phone screen *@
+    <MudTable Items="page.Items" Hover="true" Bordered="true" Breakpoint="Breakpoint.Sm" T="RequestDto">
+        <HeaderContent>
+            <MudTh>Request #</MudTh>
+            <MudTh>Location</MudTh>
+            <MudTh>Priority</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Created</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Request #">
+                <MudLink OnClick="@(() => Nav.NavigateTo($"/requests/{context.Id}"))">@context.RequestNumber</MudLink>
+            </MudTd>
+            <MudTd DataLabel="Location">@context.StockLocation</MudTd>
+            <MudTd DataLabel="Priority">@context.Priority</MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Color="@StatusColor(context.Status)" Size="Size.Small">@context.Status</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Created">@context.CreatedDate?.ToShortDateString()</MudTd>
+        </RowTemplate>
+    </MudTable>
+
+    <MudPagination Class="mt-4" Count="@Math.Max(page.TotalPages, 1)" Selected="currentPage" SelectedChanged="OnPageChanged" />
+}
+
+@code {
+    private PaginatedResponse<RequestDto>? page;
+    private int currentPage = 1;
+    private string? statusFilter;
+    private string? priorityFilter;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // No role picked yet (fresh circuit, or someone typed the URL directly) - bounce
+        // back to role selection instead of showing a list with no context on who's viewing it
+        if (AppState.CurrentRole is null)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        page = await Api.GetAllAsync(currentPage, 10, statusFilter, priorityFilter);
+        StateHasChanged();
+    }
+
+    private async Task OnPageChanged(int newPage)
+    {
+        currentPage = newPage;
+        await LoadAsync();
+    }
+
+    private static Color StatusColor(RequestStatus? status) => status switch
+    {
+        RequestStatus.Draft => Color.Default,
+        RequestStatus.Submitted => Color.Info,
+        RequestStatus.Approved => Color.Success,
+        RequestStatus.Rejected => Color.Error,
+        RequestStatus.Fulfilled => Color.Tertiary,
+        _ => Color.Default
+    };
+}

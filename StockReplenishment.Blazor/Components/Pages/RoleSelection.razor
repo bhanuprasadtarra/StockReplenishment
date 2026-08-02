@@ -1,0 +1,41 @@
+@page "/"
+@inject NavigationManager Nav
+
+<PageTitle>Stock Replenishment System</PageTitle>
+
+@* width:100% + max-width instead of a fixed width - a fixed 400px would overflow and
+   cause horizontal scrolling on phones narrower than that; this way it shrinks to fit
+   and only caps out at 400px once there's room to spare. px-4 keeps a side gutter too. *@
+<div class="d-flex justify-center align-center px-4" style="min-height: 80vh;">
+    <MudPaper Elevation="3" Class="pa-8" Style="width:100%; max-width:400px;">
+        <MudText Typo="Typo.h4" Align="Align.Center" Class="mb-4">
+            Stock Replenishment System
+        </MudText>
+        <MudText Typo="Typo.subtitle1" Align="Align.Center" Class="mb-6">
+            Select Your Role
+        </MudText>
+
+        <MudStack Spacing="3">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                       FullWidth="true" OnClick="@(() => LoginAs("Worker"))">
+                Login as Worker
+            </MudButton>
+
+            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large"
+                       FullWidth="true" OnClick="@(() => LoginAs("Reviewer"))">
+                Login as Reviewer
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+</div>
+
+@code {
+    // Workers create/submit requests, Reviewers approve/reject/fulfill them - that's
+    // the whole permission model, so picking a role here is really picking "which
+    // half of the workflow buttons do I get to see".
+    private void LoginAs(string role)
+    {
+        AppState.SetRole(role);
+        Nav.NavigateTo("/requests");
+    }
+}

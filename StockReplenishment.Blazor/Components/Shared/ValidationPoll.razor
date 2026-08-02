@@ -1,0 +1,79 @@
+@inject ApiClient Api
+@implements IAsyncDisposable
+
+<MudAlert Severity="@Severity" Class="mt-4">
+    Validation Status: <strong>@status</strong>
+    @if (status == ValidationStatus.InProgress)
+    {
+        <MudProgressLinear Indeterminate="true" Class="mt-2" />
+    }
+    @if (error is not null)
+    {
+        <div>@error</div>
+    }
+</MudAlert>
+
+@code {
+    [Parameter] public Guid RequestId { get; set; }
+    [Parameter] public EventCallback OnCompleted { get; set; }
+
+    private ValidationStatus status = ValidationStatus.InProgress;
+    private string? error;
+    private PeriodicTimer? timer;
+    private CancellationTokenSource? cts;
+
+    private Severity Severity => status switch
+    {
+        ValidationStatus.Completed => string.IsNullOrEmpty(error) ? Severity.Success : Severity.Error,
+        ValidationStatus.Failed => Severity.Error,
+        _ => Severity.Info
+    };
+
+    protected override void OnInitialized()
+    {
+        cts = new CancellationTokenSource();
+        timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        // Fire-and-forget on purpose - this needs to keep running in the background for as
+        // long as the component is on screen, not block the render
+        _ = PollAsync(cts.Token);
+    }
+
+    private async Task PollAsync(CancellationToken token)
+    {
+        try
+        {
+            while (await timer!.WaitForNextTickAsync(token))
+            {
+                var result = await Api.GetValidationStatusAsync(RequestId);
+                if (result is null) continue;
+
+                status = result.Status;
+                error = result.Error;
+                // Blazor Server circuit renders as things change, but this callback fires
+                // outside the normal event pipeline so StateHasChanged needs InvokeAsync
+                // to get back onto the right sync context
+                await InvokeAsync(StateHasChanged);
+
+                if (status != ValidationStatus.InProgress)
+                {
+                    await OnCompleted.InvokeAsync();
+                    break; // done - stop polling, parent will reload the request
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // expected when the component gets disposed (user navigated away) mid-poll
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // Without this the polling loop would keep hitting the API forever after the
+        // user navigates off the details page
+        cts?.Cancel();
+        timer?.Dispose();
+        cts?.Dispose();
+        await Task.CompletedTask;
+    }
+}

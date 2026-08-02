@@ -1,20 +1,49 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
 
-<div class="page">
-    <div class="sidebar">
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+@* Sidebar is gone - navigation now lives in a single horizontal app bar (dark blue,
+   same tone the sidebar used to be) so pages get the full page width instead of
+   losing a ~250px rail on the left *@
+<MudLayout>
+    <MudAppBar Elevation="2" Style="background-color:#052767;">
+        <MudText Typo="Typo.h6" Class="d-none d-sm-block mr-6" Style="white-space:nowrap;">
+            Stock Replenishment
+        </MudText>
+
+        @* Requests / New Request links, role-gated inside NavMenu itself *@
         <NavMenu />
-    </div>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
+        <MudSpacer />
 
-        <article class="content px-4">
+        @if (AppState.CurrentRole is not null)
+        {
+            @* Drop the role label on phones so the bar doesn't wrap - the Switch Role
+               button alone is enough space to work with there *@
+            <MudHidden Breakpoint="Breakpoint.SmAndDown">
+                <MudText Class="mr-4">Role: <strong>@AppState.GetRole()</strong></MudText>
+            </MudHidden>
+            @* forceLoad clears the page's in-memory state along with navigating back to
+               role selection - a plain NavigateTo would leave stale data cached on the page *@
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Inherit"
+                       OnClick="@(() => { AppState.ClearRole(); Nav.NavigateTo("/", forceLoad: true); })">
+                Switch Role
+            </MudButton>
+        }
+    </MudAppBar>
+
+    <MudMainContent>
+        @* Capping the width keeps line lengths readable on wide monitors - MudContainer
+           still takes care of the responsive left/right padding underneath that cap *@
+        <MudContainer MaxWidth="MaxWidth.False" Style="max-width:1200px;" Class="py-6">
             @Body
-        </article>
-    </main>
-</div>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
