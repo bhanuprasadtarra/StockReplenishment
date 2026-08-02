@@ -28,7 +28,16 @@
                 }
             </MudSelect>
         </MudItem>
-        <MudItem xs="12" sm="4" Class="d-flex align-center">
+        <MudItem xs="12" sm="3">
+            @* Locations aren't an enum, so the option list is loaded from actual request data instead of hardcoded *@
+            <MudSelect T="string" Label="Location" Value="locationFilter" Clearable="true" ValueChanged="@(async v => { locationFilter = v; await LoadAsync(); })">
+                @foreach (var l in availableLocations)
+                {
+                    <MudSelectItem Value="@l">@l</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="3" Class="d-flex align-center">
             <MudSpacer />
             @* Reviewers only ever act on requests someone else already created, so there's
                nothing for them to do on this button *@
@@ -80,6 +89,8 @@ else
     private int currentPage = 1;
     private string? statusFilter;
     private string? priorityFilter;
+    private string? locationFilter;
+    private List<string> availableLocations = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -90,12 +101,21 @@ else
             Nav.NavigateTo("/");
             return;
         }
+        await LoadAvailableLocationsAsync();
         await LoadAsync();
+    }
+
+    // Loaded once, unfiltered and unpaginated, so the dropdown always lists every location
+    // in the system - not just whatever happens to be on the current filtered/paginated page
+    private async Task LoadAvailableLocationsAsync()
+    {
+        var all = await Api.GetAllAsync(1, 1000);
+        availableLocations = all?.Items.Select(r => r.StockLocation).Distinct().OrderBy(l => l).ToList() ?? new();
     }
 
     private async Task LoadAsync()
     {
-        page = await Api.GetAllAsync(currentPage, 10, statusFilter, priorityFilter);
+        page = await Api.GetAllAsync(currentPage, 10, statusFilter, priorityFilter, locationFilter);
         StateHasChanged();
     }
 
