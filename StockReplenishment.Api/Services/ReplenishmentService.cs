@@ -148,12 +148,14 @@ public class ReplenishmentService : IReplenishmentService
         request.StockLocation = dto.StockLocation;
         request.Priority = dto.Priority;
         request.Notes = dto.Notes;
+        _db.LineItems.RemoveRange(request.LineItems.ToList());
         request.LineItems.Clear();
         foreach (var li in dto.LineItems)
         {
-            request.LineItems.Add(new RequestLineItem
+            _db.LineItems.Add(new RequestLineItem
             {
                 Id = li.Id ?? Guid.NewGuid(),
+                ReplenishmentRequestId = request.Id,
                 ArticleNumber = li.ArticleNumber,
                 Description = li.Description,
                 RequestedQuantity = li.RequestedQuantity,

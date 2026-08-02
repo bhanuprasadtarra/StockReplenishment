@@ -117,4 +117,23 @@ public class RequestsControllerTests
         Assert.That(ok, Is.Not.Null);
         Assert.That(ok!.Value, Is.EqualTo(response));
     }
+
+    // Confirms page/pageSize/status/priority/location query params are all forwarded to the
+    // service as-is, not just defaulted or dropped.
+    [Test]
+    public async Task GetAll_WithPaginationParams_CallsServiceWithCorrectParams()
+    {
+        var response = new ApiResponse<PaginatedResponse<RequestDto>>
+        {
+            Success = true,
+            Data = new PaginatedResponse<RequestDto> { Items = new(), CurrentPage = 2, PageSize = 5 }
+        };
+        _service.GetAllAsync(2, 5, "Approved", "Urgent", "Station-A").Returns(response);
+
+        var result = await _controller.GetAll(page: 2, pageSize: 5, status: "Approved", priority: "Urgent", location: "Station-A");
+
+        var ok = result.Result as OkObjectResult;
+        Assert.That(ok, Is.Not.Null);
+        await _service.Received(1).GetAllAsync(2, 5, "Approved", "Urgent", "Station-A");
+    }
 }
