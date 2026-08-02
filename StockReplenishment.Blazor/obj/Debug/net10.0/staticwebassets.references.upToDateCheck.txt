@@ -1,4 +1,0 @@
-C:\Users\bhanu\Code\Code\Hitachi Energy\StockReplenishment\StockReplenishment.Api\obj\Debug\net10.0\staticwebassets.build.json
-C:\Users\bhanu\Code\Code\Hitachi Energy\StockReplenishment\StockReplenishment.Api\obj\Debug\net10.0\staticwebassets.build.json
-C:\Users\bhanu\Code\Code\Hitachi Energy\StockReplenishment\StockReplenishment.Api\obj\Debug\net10.0\staticwebassets.build.json
-C:\Users\bhanu\Code\Code\Hitachi Energy\StockReplenishment\StockReplenishment.Api\obj\Debug\net10.0\staticwebassets.build.json
