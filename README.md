@@ -1,8 +1,7 @@
 # Stock Replenishment Request System
 
 A small internal tool for factory floor workers to request material replenishment at their
-station, and for reviewers to approve, reject, or fulfill those requests. Built as a reference
-implementation for a **System Development Specialist** assignment modeled on METS, a
+station, and for reviewers to approve, reject, or fulfill those requests. A simple
 manufacturing execution and tracking system.
 
 Two roles, one app: **Workers** create and submit requests; **Reviewers** approve, reject, and
@@ -108,30 +107,6 @@ everything goes through the API over HTTP, the same way a real external client w
                    │   EF Core InMemory store    │
                    │   Requests · RequestLineItems│
                    └───────────────────────────┘
-```
-
-### Async validation flow
-
-The assignment specifically calls out that the external stock check is slow and must not block
-the request or degrade the UI. It's handled as fire-and-forget-with-polling:
-
-```
-Worker            Blazor (ApiClient)         API (Controller/Service)      Background Task
-  │  Submit          │                              │                            │
-  ├─────────────────►│  POST /requests/{id}/submit  │                            │
-  │                  ├─────────────────────────────►│                            │
-  │                  │                               │  status -> Submitted       │
-  │                  │                               │  ValidationStatus.InProgress│
-  │                  │                               ├───────────────────────────►│
-  │                  │  202 Accepted + Location       │  (Task.Run, own DI scope) │
-  │                  │◄──────────────────────────────┤                            │
-  │  "Validating..." │                               │                    Task.Delay(3-8s)
-  │◄─────────────────┤                               │                    ~80% pass rate
-  │                  │  poll GET .../validation-status│                            │
-  │                  ├──────────────────────────────►│                            │
-  │                  │◄──────────────────────────────┤                    Completed / Failed
-  │  result shown     │                               │◄───────────────────────────┤
-  │◄─────────────────┤                               │                            │
 ```
 
 The background task uses its own DI scope (`IServiceScopeFactory`) rather than the request's
